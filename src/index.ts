@@ -50,8 +50,43 @@ export class ChakramApi {
     constructor(private cookies: string) {}
 
     /**
-     * Given the titleId of an episode, retrieve available
-     * manifest URLs and the licenseURL
+     * Fetch the license data with the given URL and challengeData,
+     * which should either be a Buffer of binary data, or the same
+     * type of data base64-encoded as a string.
+     */
+    public async fetchLicense(
+        licenseUrl: string,
+        challengeData: Buffer | string,
+    ) {
+        const base64: string = (challengeData instanceof Buffer)
+            ? challengeData.toString("base64")
+            : challengeData;
+        const response = await this.loadUrl(licenseUrl, {
+            asJson: false,
+            fillParams: false,
+            form: {
+                includeHdcpTestKeyInLicense: true,
+                widevine2Challenge: base64,
+            },
+        });
+
+        if (response.error) {
+            throw response.error;
+        } else if (response.errorsByResource) {
+            throw response.errorsByResource.Widevine2License;
+        }
+
+        return response.widevine2License.license;
+    }
+
+    /**
+     * Given the titleId of an episode or movie, retrieve info on how
+     * to play it using DASH and Widevine DRM. This consists of
+     * available manifest URLs and the licenseURL.
+     *
+     * Note that Amazon uses a non-standard method for retrieving the
+     * license data, so you cannot simply pass the Widevine DRM directly
+     * to the `licenseUrl`—you MUST use fetchLicense.
      */
     public async getPlaybackInfo(
         episodeTitleId: string,
@@ -226,6 +261,7 @@ export class ChakramApi {
             asJson?: boolean,
             body?: any,
             fillParams?: boolean,
+            form?: any,
             method?: "get" | "post",
             qs?: {},
         },
@@ -234,6 +270,7 @@ export class ChakramApi {
             asJson: true,
             body: undefined,
             fillParams: true,
+            form: undefined,
             method: "get",
             qs: {},
         }, options || {});
@@ -243,6 +280,7 @@ export class ChakramApi {
 
         return this.request({
             body: opts.body,
+            form: opts.form,
             gzip: true,
             headers: {
                 "Accept": "text/html,application/xhtml+xml,application/xml;" +
