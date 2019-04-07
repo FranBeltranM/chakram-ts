@@ -21,6 +21,7 @@ export interface ISeason extends IBaseObj, INumbered {
 
 export interface IEpisode extends IBaseObj, INumbered {
     season?: ISeason;
+    series?: ISeries;
 
     watched: boolean;
     watchCompleted: boolean;
