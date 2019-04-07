@@ -2,6 +2,7 @@ import request from "request-promise-native";
 import urllib from "url";
 
 import { titlesToEpisodes } from "./format";
+import { generateDeviceId } from "./util";
 
 const URL_ROOT = "https://www.amazon.com";
 const ATV_ROOT = "https://atv-ps.amazon.com/cdp/";
@@ -46,8 +47,14 @@ enum ResourceType {
 export class ChakramApi {
 
     private request = request.defaults({});
+    private deviceId: string;
 
-    constructor(private cookies: string) {}
+    constructor(
+        private cookies: string,
+        deviceId?: string,
+    ) {
+        this.deviceId = deviceId || generateDeviceId(USER_AGENT);
+    }
 
     /**
      * Fetch the license data with the given URL and challengeData,
@@ -62,18 +69,32 @@ export class ChakramApi {
             ? challengeData.toString("base64")
             : challengeData;
         const response = await this.loadUrl(licenseUrl, {
-            asJson: false,
+            asJson: true,
             fillParams: false,
             form: {
                 includeHdcpTestKeyInLicense: true,
                 widevine2Challenge: base64,
             },
+            method: "post",
         });
 
         if (response.error) {
             throw response.error;
         } else if (response.errorsByResource) {
             throw response.errorsByResource.Widevine2License;
+        } else if (typeof response === "string") {
+            let json: any;
+            try {
+                json = JSON.parse(response);
+            } catch (e) {
+                throw new Error(response);
+            }
+
+            if (json.message && json.message.statusCode === "ERROR") {
+                throw new Error(json.message.body.message);
+            }
+
+            throw new Error(response);
         }
 
         return response.widevine2License.license;
@@ -215,8 +236,9 @@ export class ChakramApi {
         resourceType: ResourceType,
     ) {
         const url = urllib.parse(URLS.atvPlayback);
+        const params = this.getPlaybackResourcesParams(vars, episodeTitleId, resourceType);
         return urllib.format(Object.assign(url, {
-            query: this.getPlaybackResourcesParams(vars, episodeTitleId, resourceType),
+            query: this.fillParams(params),
         }));
     }
 
@@ -234,6 +256,7 @@ export class ChakramApi {
             desiredResources: resourceType,
             deviceBitrateAdaptationsOverride: valWhen(!isWidevineLicense, "CVBR,CBR"),
             deviceDrmOverride: "CENC",
+            deviceID: vars.deviceID,
             deviceProtocolOverride: valWhen(!isWidevineLicense, "Http"),
             deviceStreamingTechnologyOverride: "DASH",
             deviceTypeID: "AOAGZA014O5RE",
@@ -243,7 +266,7 @@ export class ChakramApi {
             languageFeature: "MLFv2",
             marketplaceID: vars.marketplaceId,
             resourceUsage: "ImmediateConsumption",
-            supportedDRMKeyScheme: "DUAL_KEY",
+            supportedDRMKeyScheme: valWhen(!isWidevineLicense, "DUAL_KEY"),
             titleDecorationScheme: valWhen(!isWidevineLicense, "primary-content"),
             token: vars.token,
             version: "1",
@@ -274,20 +297,26 @@ export class ChakramApi {
             method: "get",
             qs: {},
         }, options || {});
+
         const qs = opts.fillParams
             ? this.fillParams(opts.qs || {})
             : opts.qs || {};
+
+        const headers = {
+            "Cookie": this.cookies,
+            "User-Agent": USER_AGENT,
+        } as any;
+
+        if (!opts.asJson) {
+            headers.Accept = "text/html,application/xhtml+xml,application/xml;" +
+                "q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3";
+        }
 
         return this.request({
             body: opts.body,
             form: opts.form,
             gzip: true,
-            headers: {
-                "Accept": "text/html,application/xhtml+xml,application/xml;" +
-                    "q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3",
-                "Cookie": this.cookies,
-                "User-Agent": USER_AGENT,
-            },
+            headers,
             json: opts.asJson,
             method: opts.method,
             qs,
@@ -296,11 +325,19 @@ export class ChakramApi {
     }
 
     private fillParams(params: {}) {
-        return Object.assign({
-            deviceID: "", // TODO ?
+        const filled: any = Object.assign({
+            deviceID: this.deviceId,
             deviceTypeID: "A1MPSLFC7L5AFK",
             firmware: "fmw:15-app:1.1.19",
             format: "json",
         }, params);
+
+        for (const k of Object.keys(filled)) {
+            if (filled[k] === undefined) {
+                delete filled[k];
+            }
+        }
+
+        return filled;
     }
 }

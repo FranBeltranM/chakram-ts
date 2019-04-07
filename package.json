@@ -8,7 +8,12 @@
     "/dist"
   ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc -p .",
+    "check": "npm run lint && npm run build",
+    "lint": "tslint -p .",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run check",
+    "test": "mocha -r ts-node/register test/**/*-test.ts"
   },
   "repository": {
     "type": "git",
@@ -22,10 +27,12 @@
   "homepage": "https://github.com/dhleong/chakram-ts#readme",
   "dependencies": {
     "request": "^2.88.0",
-    "request-promise-native": "^1.0.7"
+    "request-promise-native": "^1.0.7",
+    "uuid": "^3.3.2"
   },
   "devDependencies": {
     "@types/request": "^2.48.1",
-    "@types/request-promise-native": "^1.0.15"
+    "@types/request-promise-native": "^1.0.15",
+    "@types/uuid": "^3.4.4"
   }
 }
