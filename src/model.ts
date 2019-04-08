@@ -23,7 +23,8 @@ export interface IEpisode extends IBaseObj, INumbered {
     season?: ISeason;
     series?: ISeries;
 
-    watched: boolean;
-    watchCompleted: boolean;
-    watchedPositionMillis: number;
+    // NOTE: these properties never seem to actually mean anything, sadly...
+    // watched: boolean;
+    // watchCompleted: boolean;
+    // watchedPositionMillis: number;
 }

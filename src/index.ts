@@ -1,7 +1,8 @@
 import request from "request-promise-native";
 import urllib from "url";
 
-import { titlesToEpisodes } from "./format";
+import { formatObj, titlesToEpisodes } from "./format";
+import { IBaseObj } from "./model";
 import { generateDeviceId } from "./util";
 
 const URL_ROOT = "https://www.amazon.com";
@@ -9,6 +10,7 @@ const ATV_ROOT = "https://atv-ps.amazon.com/cdp/";
 const URLS = {
     notifierResources: URL_ROOT + "/gp/deal/ajax/getNotifierResources.html",
     playerToken: URL_ROOT + "/gp/video/streaming/player-token.json",
+    videoDetail: URL_ROOT + "/gp/video/detail/",
 
     atvContent: ATV_ROOT,
     atvPlayback: ATV_ROOT + "catalog/GetPlaybackResources",
@@ -154,6 +156,59 @@ export class ChakramApi {
         });
         const { titles } = results;
         return titlesToEpisodes(titles);
+    }
+
+    public async getTitleInfo(titleId: string): Promise<IBaseObj>;
+    public async getTitleInfo(titleIds: string[]): Promise<IBaseObj[]>;
+    public async getTitleInfo(titleIdOrIds: string | string[]) {
+        const results = await this.getList({
+            asinList: typeof titleIdOrIds === "string"
+                ? [titleIdOrIds]
+                : titleIdOrIds,
+            catalog: "GetASINDetails",
+        });
+
+        const { titles } = results;
+        const formatted = titles.map(formatObj);
+        if (typeof titleIdOrIds === "string") {
+            return formatted[0];
+        }
+
+        return formatted;
+    }
+
+    /**
+     * Attempt to guess the resume info for a given titleId, which
+     * could be for a Movie, a Series, or an Episode.  The `id`
+     * returned is the resolved title ID to play, which might be for an
+     * Episode if `titleId` was for a Series, for example. You can
+     * fetch metadata like the Title and a Cover image using
+     * `getTitleInfo`.
+     *
+     * This process scrapes a webpage so it may not be super reliable...
+     */
+    public async guessResumeInfo(titleId: string) {
+        const url = URLS.videoDetail + titleId;
+        const html = await this.request.get({
+            gzip: true,
+            headers: {
+                cookie: this.cookies,
+            },
+            url,
+        });
+
+        // would a beautifulsoup-type parser be better here?
+        const m = (html as string).match(/type="application\/json">(.+?)<\/script/);
+        if (!m) throw new Error("Unable to determine episode to resume");
+        const json = JSON.parse(m[1]);
+        if (!json.videoConfig) {
+            throw new Error("Unable to determine episode to resume");
+        }
+
+        return {
+            id: json.videoConfig.asin as string,
+            startTimeMillis: json.videoConfig.position as number,
+        };
     }
 
     private async getList(options: {
