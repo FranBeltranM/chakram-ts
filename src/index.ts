@@ -14,6 +14,7 @@ const URLS = {
 
     atvContent: ATV_ROOT,
     atvPlayback: ATV_ROOT + "catalog/GetPlaybackResources",
+    updateStream: ATV_ROOT + "usage/UpdateStream",
 };
 
 const USER_AGENT =
@@ -50,6 +51,8 @@ export class ChakramApi {
 
     private request = request.defaults({});
     private deviceId: string;
+
+    private marketplaceId: string | undefined;
 
     constructor(
         private cookies: string,
@@ -211,6 +214,35 @@ export class ChakramApi {
         };
     }
 
+    public async saveWatchTime(
+        titleId: string,
+        timeMillis: number,
+        event: "PAUSE" | "START" = "PAUSE", // presumably there are others
+    ) {
+        const response = await this.request.get({
+            headers: {
+                cookie: this.cookies,
+            },
+            qs: this.fillParams({
+                asin: titleId,
+                event,
+                firmware: 1,
+                marketplaceID: await this.getMarketplaceId(),
+                timecode: timeMillis,
+                version: 1,
+            }),
+            url: URLS.updateStream,
+        });
+
+        if (
+            response
+            && response.message
+            && response.message.statusCode === "ERROR"
+        ) {
+            throw new Error(response.message.body.message);
+        }
+    }
+
     private async getList(options: {
         asinList?: string[],
         catalog?: string,
@@ -280,9 +312,19 @@ export class ChakramApi {
         }
 
         const customerData = notifierResources.resourceData.GBCustomerData;
-        return this.fillParams(Object.assign({
+        const vars = this.fillParams(Object.assign({
             token,
         }, customerData)) as any as IPlaybackVars;
+
+        this.marketplaceId = vars.marketplaceId;
+        return vars;
+    }
+
+    private async getMarketplaceId() {
+        if (this.marketplaceId) return this.marketplaceId;
+
+        const vars = await this.getPlaybackVars();
+        return vars.marketplaceId;
     }
 
     private getPlaybackResourcesUrl(
