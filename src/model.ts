@@ -1,6 +1,7 @@
 export enum ContentType {
     EPISODE = "EPISODE",
     MOVIE = "MOVIE",
+    SEASON = "SEASON",
     SERIES = "SERIES",
 }
 
@@ -24,6 +25,7 @@ export interface ISeries extends IBaseObj {
 }
 
 export interface ISeason extends IBaseObj, INumbered {
+    series?: ISeries;
 }
 
 export interface IEpisode extends IBaseObj, INumbered {
