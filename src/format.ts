@@ -1,4 +1,4 @@
-import { IEpisode, ISeason, ISeries, ContentType } from "./model";
+import { ContentType, IEpisode, ISeason, ISeries } from "./model";
 
 function findCover(input: any) {
     if (!input.formats) return;
