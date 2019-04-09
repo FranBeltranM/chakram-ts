@@ -2,8 +2,8 @@ import request from "request-promise-native";
 import urllib from "url";
 
 import { formatObj, titlesToEpisodes } from "./format";
-import { IBaseObj } from "./model";
-import { generateDeviceId } from "./util";
+import { ContentType, IBaseObj } from "./model";
+import { generateDeviceId, TitleQuery } from "./util";
 
 const URL_ROOT = "https://www.amazon.com";
 const ATV_ROOT = "https://atv-ps.amazon.com/cdp/";
@@ -214,6 +214,29 @@ export class ChakramApi {
         };
     }
 
+    /**
+     * Search for Series or Movies matching the given query
+     */
+    public async search(
+        query: string,
+        type?: ContentType,
+    ): Promise<IBaseObj[]> {
+        const results = await this.getList({
+            catalog: "Search",
+            qs: {
+                searchString: query,
+            },
+        });
+        const { titles } = results;
+        const objs = (titles as any[]).map(formatObj);
+
+        // NOTE: Amazon's search API is... not smart.  The results
+        // on their webpage are better, but let's leave webpage
+        // scraping to future work
+        const matcher = new TitleQuery(query);
+        return matcher.filter(objs, type);
+    }
+
     public async saveWatchTime(
         titleId: string,
         timeSeconds: number,
@@ -249,11 +272,13 @@ export class ChakramApi {
     private async getList(options: {
         asinList?: string[],
         catalog?: string,
-        contentType?: "Movie" | "TVEpisode",
+        // contentType?: "Movie" | "TVEpisode",
+        contentType?: string,
         orderBy?: string,
         resultsCount?: number,
         rollupSeason?: boolean,
         seasonAsins?: string[],
+        qs?: any,
     }) {
         const opts = Object.assign({
             catalog: "Browse",
@@ -263,7 +288,7 @@ export class ChakramApi {
         }, options || {});
 
         const isEpisodeContent = opts.contentType === "Episode";
-        const qs = {
+        const qs = Object.assign({
             ContentType: opts.contentType,
             Detailed: TWhen(opts.catalog === "TVEpisode"),
             IncludeAll: "T",
@@ -279,7 +304,7 @@ export class ChakramApi {
             playbackInformationRequired: true,
             tag: valWhen(isEpisodeContent, 1),
             version: 2,
-        };
+        }, opts.qs || {});
 
         const result = await this.loadUrl(
             `${URLS.atvContent}catalog/${opts.catalog}`,
