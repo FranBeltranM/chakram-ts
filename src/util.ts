@@ -15,25 +15,25 @@ export function generateDeviceId(
 }
 
 export function *unique(objs: Iterable<IBaseObj>) {
-    const seen: {[id: string]: boolean} = {};
+    const seen = new Set<string>();
     for (const obj of objs) {
-        if (seen[obj.id]) continue;
+        if (seen.has(obj.id)) continue;
 
         // most common:
         if (obj.type === ContentType.SEASON) {
             const series = (obj as ISeason).series;
             if (!series) continue;
-            if (seen[series.id]) continue;
+            if (seen.has(series.id)) continue;
 
-            seen[series.id] = true;
+            seen.add(series.id);
             yield Object.assign({
                 type: ContentType.SERIES,
             }, series);
         }
 
         // rarely happens
-        if (!seen[obj.id] && obj.type === ContentType.SERIES) {
-            seen[obj.id] = true;
+        if (!seen.has(obj.id) && obj.type === ContentType.SERIES) {
+            seen.add(obj.id);
             yield obj;
         }
 
@@ -62,20 +62,35 @@ export class TitleQuery {
         type?: ContentType,
     ) {
         const matches: Array<[IBaseObj, number]> = [];
+        const uhdTitles = new Set<string>();
         for (const title of unique(objs)) {
             if (type && title.type !== type) {
                 continue;
             }
+
+            if (title.title.includes("4K UHD")) {
+                uhdTitles.add(title.title.replace("(4K UHD)", "").trim());
+            } else if (uhdTitles.has(title.title)) {
+                // there's a higher-def version of this title
+                continue;
+            }
+
             const score = this.score(title.title);
             if (score > 0) {
                 matches.push([title, score]);
             }
         }
 
+        // filter out dups caused by having a separate title for the 4k version
+        // that came *before* the 4k version in the results
+        const filtered = matches.filter(it => !uhdTitles.has(it[0].title));
+
         // sort by score in descending order
-        const sorted = matches.sort(([, scoreA], [, scoreB]) => {
+        const sorted = filtered.sort(([, scoreA], [, scoreB]) => {
             return scoreB - scoreA;
         });
+
+        // drop the scores and return the titles
         return sorted.map(it => it[0]);
     }
 
@@ -95,6 +110,8 @@ export class TitleQuery {
         let score = 0;
         let lastIdx = 0;
         for (const p of this.parts) {
+            if (p.length <= 3) continue; // skip stop words
+
             const foundAt = candidate.indexOf(p, lastIdx);
             if (foundAt >= 0) {
                 lastIdx = foundAt;
