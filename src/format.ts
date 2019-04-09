@@ -1,4 +1,4 @@
-import { IEpisode, ISeason, ISeries } from "./model";
+import { IEpisode, ISeason, ISeries, ContentType } from "./model";
 
 function findCover(input: any) {
     if (!input.formats) return;
@@ -61,6 +61,7 @@ export function formatObj(input: any) {
         id: input.titleId as string,
         number: input.number as number,
         title: input.title as string,
+        type: input.contentType as ContentType,
 
         season: findSeason(input),
         series: findSeries(input),

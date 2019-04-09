@@ -1,3 +1,9 @@
+export enum ContentType {
+    EPISODE = "EPISODE",
+    MOVIE = "MOVIE",
+    SERIES = "SERIES",
+}
+
 export interface IHasId {
     id: string;
 }
@@ -10,6 +16,7 @@ export interface IBaseObj extends IHasId {
     cover?: string;
     watchUrl: string;
     title: string;
+    type: ContentType;
 }
 
 // tslint:disable-next-line no-empty-interface
